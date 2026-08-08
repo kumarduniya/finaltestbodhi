@@ -6935,6 +6935,16 @@
                 return s.replace(/\\%/g, '\uE030').replace(/%/g, '\\%').replace(/\uE030/g, '\\%');
             }
 
+            // The Rupee sign (₹) isn't a character MathJax's TeX parser
+            // understands, so any "$₹2288$" style span throws its red
+            // "Math input error" badge. Wrapping it in \text{} tells MathJax
+            // to treat it as a literal symbol instead of trying to parse it
+            // as math syntax — safe here since ₹ is a single currency glyph,
+            // not Devanagari script that needs conjunct shaping.
+            function escRupee(s) {
+                return s.replace(/₹/g, '\\text{₹}');
+            }
+
             // Symbol/spacing clean-up shared by both the Hindi-only bypass and
             // the mixed-span path below (kept separate from actual Hindi-word
             // handling so it's safe to run on plain math leftovers too).
@@ -6983,7 +6993,7 @@
             // MathJax's \text{}, which can't shape Devanagari conjuncts.
             function handleSpan(innerMath, open, close) {
                 if (!HINDI_RE.test(innerMath)) {
-                    return open + escPercent(innerMath) + close; // pure math, % escaped for MathJax
+                    return open + escRupee(escPercent(innerMath)) + close; // pure math, % + ₹ escaped for MathJax
                 }
 
                 if (!hasLatinMathVar(innerMath)) {
@@ -7017,7 +7027,7 @@
                 let m2;
                 const flushMath = () => {
                     if (mathBuf.trim() !== '') {
-                        resultHtml += stashChunk(open + escPercent(mathBuf) + close);
+                        resultHtml += stashChunk(open + escRupee(escPercent(mathBuf)) + close);
                     }
                     mathBuf = '';
                 };
