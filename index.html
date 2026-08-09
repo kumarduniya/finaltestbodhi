@@ -7039,7 +7039,14 @@
                 let m2;
                 const flushMath = () => {
                     if (mathBuf.trim() !== '') {
-                        resultHtml += stashChunk(open + escRupee(escPercent(mathBuf)) + close);
+                        // Always inline ($...$) here, regardless of the
+                        // original open/close (which may be display "$$").
+                        // These fragments sit side-by-side with plain HTML
+                        // spans (Hindi text, html-frac) as part of one running
+                        // line, so keeping them as display math would force
+                        // each fragment onto its own centered block-level
+                        // line — exactly the stacked/broken layout this fixes.
+                        resultHtml += stashChunk('$' + escRupee(escPercent(mathBuf)) + '$');
                     }
                     mathBuf = '';
                 };
