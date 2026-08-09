@@ -6898,6 +6898,26 @@
         window.sanitizeMath = function(text) {
             if (!text) return text;
             let str = String(text);
+
+            // Protect <img ...> and <svg>...</svg> tags BEFORE any $ math
+            // processing runs. If a question's image/diagram markup happens
+            // to sit between two $ signs used elsewhere in the same field,
+            // the $...$ regex below would swallow the whole tag as "math
+            // content" and hand it to MathJax, which can't parse raw HTML —
+            // the result is blank output with no visible error, which is
+            // exactly what made images/SVGs silently disappear. Stashing them
+            // first means the $ regex never sees them at all.
+            const protectedTags = [];
+            const TAG_OPEN = '\uE040', TAG_CLOSE = '\uE041';
+            str = str.replace(/<svg[\s\S]*?<\/svg>/gi, (m) => {
+                protectedTags.push(m);
+                return `${TAG_OPEN}${protectedTags.length - 1}${TAG_CLOSE}`;
+            });
+            str = str.replace(/<img\b[^>]*>/gi, (m) => {
+                protectedTags.push(m);
+                return `${TAG_OPEN}${protectedTags.length - 1}${TAG_CLOSE}`;
+            });
+
             str = str.replace(/\\text\{([^{}]*)\}/g, '$1');
             const PLACEHOLDER = "__RS_DOLLAR__";
             str = str.replace(/([a-zA-Z0-9])\$([a-zA-Z0-9])/g, `$1${PLACEHOLDER}$2`);
@@ -7080,6 +7100,10 @@
             // literal "$"/"$$" characters can never be re-matched above.
             str = str.replace(new RegExp(CHUNK_OPEN + '(\\d+)' + CHUNK_CLOSE, 'g'), (m, idx) => mathChunks[parseInt(idx, 10)]);
             str = str.replace(new RegExp(PLACEHOLDER, 'g'), '\\$');
+            // Restore the protected <img>/<svg> tags last, once every $ / $$ /
+            // \( \) / \[ \] pass has already finished, so they always come
+            // back exactly as they went in.
+            str = str.replace(new RegExp(TAG_OPEN + '(\\d+)' + TAG_CLOSE, 'g'), (m, idx) => protectedTags[parseInt(idx, 10)]);
             return str;
         };
 
@@ -7122,21 +7146,31 @@
             return `<span class="pdf-tag-badge">📌 GENERAL</span>`;
         };
 
+        // Removes stray citation markers like "[cite: 1]", "[cite:1, 2]" that
+        // come through from the Worker's parsed output (the Worker doesn't
+        // strip these itself), e.g. from Google Docs exports pasted into the
+        // admin panel's raw text box. Mirrors admin.html's own helper of the
+        // same name so both sides clean the same way.
+        window.stripCitationRefs = function(text) {
+            if (!text) return text;
+            return String(text).replace(/\[\s*cite\s*:\s*[\d,\s]*\]/gi, '');
+        };
+
         window.sanitizeQuestions = function(questionsArray) {
             if (!questionsArray || !Array.isArray(questionsArray)) return [];
             return questionsArray.map(q => {
                 const safeQ = { ...q };
-                if (safeQ.q) safeQ.q = window.sanitizeMath(safeQ.q);
-                if (safeQ.exp) safeQ.exp = window.sanitizeMath(safeQ.exp);
-                if (safeQ.passage) safeQ.passage = window.sanitizeMath(safeQ.passage);
+                if (safeQ.q) safeQ.q = window.sanitizeMath(window.stripCitationRefs(safeQ.q));
+                if (safeQ.exp) safeQ.exp = window.sanitizeMath(window.stripCitationRefs(safeQ.exp));
+                if (safeQ.passage) safeQ.passage = window.sanitizeMath(window.stripCitationRefs(safeQ.passage));
                 if (safeQ.opts) {
-                    safeQ.opts = safeQ.opts.map(o => ({ ...o, text: window.sanitizeMath(o.text) }));
+                    safeQ.opts = safeQ.opts.map(o => ({ ...o, text: window.sanitizeMath(window.stripCitationRefs(o.text)) }));
                 }
                 if (safeQ.predicted && Array.isArray(safeQ.predicted)) {
                     safeQ.predicted = safeQ.predicted.map(p => ({
                         ...p,
-                        q: p.q ? window.sanitizeMath(p.q) : p.q,
-                        s: p.s ? window.sanitizeMath(p.s) : p.s
+                        q: p.q ? window.sanitizeMath(window.stripCitationRefs(p.q)) : p.q,
+                        s: p.s ? window.sanitizeMath(window.stripCitationRefs(p.s)) : p.s
                     }));
                 }
                 return safeQ;
