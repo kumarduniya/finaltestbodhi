@@ -219,9 +219,22 @@
         .q-passage-box svg,
         .analysis-box svg {
             border-radius:5px;
-            max-height: 250px;
+            max-height: 420px;
+            max-width: 100%;
             width: auto;
+            height: auto;
             object-fit: contain;
+            display: block !important;
+            margin: 5px 0 !important;
+            margin-left: 0 !important;
+            float: none !important;
+        }
+        .q-text table,
+        .q-passage-box table,
+        .analysis-box table {
+            max-width: 100%;
+            margin: 5px 0 !important;
+            margin-left: 0 !important;
         }
         .MathJax {
             font-size: 1.15em !important;
@@ -3622,6 +3635,40 @@
                 break-inside: auto !important;
                 text-align: justify !important;
                 position: relative !important;
+            }
+            /* Question images/diagrams/SVGs inside the PDF were showing up
+               shrunk, indented from the left, or shifted mid-column — the
+               2-column CSS layout (.pdf-questions-container) combined with
+               any inline centering baked into a chart's own markup pushed
+               them out of place. Forcing block/left/no-float here, plus
+               break-inside:avoid so an image is never split across the
+               column boundary, fixes both the sizing and the alignment. */
+            .print-q img,
+            .print-q svg,
+            .print-passage img,
+            .print-passage svg,
+            .print-exp img,
+            .print-exp svg {
+                display: block !important;
+                margin: 4px 0 !important;
+                margin-left: 0 !important;
+                float: none !important;
+                max-width: 100% !important;
+                max-height: 320px !important;
+                width: auto !important;
+                height: auto !important;
+                object-fit: contain !important;
+                break-inside: avoid !important;
+                page-break-inside: avoid !important;
+            }
+            .print-q table,
+            .print-passage table,
+            .print-exp table {
+                margin: 4px 0 !important;
+                margin-left: 0 !important;
+                max-width: 100% !important;
+                break-inside: avoid !important;
+                page-break-inside: avoid !important;
             }
             .opt-grid {
                 display: grid;
