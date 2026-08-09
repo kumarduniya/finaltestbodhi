@@ -3692,16 +3692,62 @@
             }
             .print-q img,
             .print-exp img,
-            .print-passage img,
+            .print-passage img {
+                max-width: 100% !important;
+                width: auto !important;
+                max-height: 320px !important;
+                object-fit: contain !important;
+                object-position: left top !important;
+                page-break-inside: avoid !important;
+                display: block !important;
+                float: none !important;
+                margin: 6px auto 6px 0 !important;
+                text-align: left !important;
+            }
+            /* Guarantees left alignment even when the pasted question HTML
+               wraps the <img>/<svg> in its own <p>/<div style="text-align:
+               center"> (common when content is pasted in from Word/Docs) —
+               without this, that inherited centering can still visually
+               offset a display:block image away from the left edge even
+               though the image element's own margin is 0 on the left. */
+            .print-q p:has(> img), .print-exp p:has(> img), .print-passage p:has(> img),
+            .print-q div:has(> img), .print-exp div:has(> img), .print-passage div:has(> img),
+            .print-q p:has(> svg), .print-exp p:has(> svg), .print-passage p:has(> svg),
+            .print-q div:has(> svg), .print-exp div:has(> svg), .print-passage div:has(> svg) {
+                text-align: left !important;
+            }
+            /* SVG question images in the PDF: bigger and uniform across every
+               question (regardless of the pasted SVG's own width/height/
+               viewBox), always left-aligned right under the question text —
+               matching the student portal's rendering exactly. */
             .print-q svg,
             .print-exp svg,
             .print-passage svg {
+                width: 360px !important;
+                height: 240px !important;
                 max-width: 100% !important;
-                max-height: 100px !important;
+                max-height: none !important;
                 object-fit: contain !important;
+                object-position: left top !important;
                 page-break-inside: avoid !important;
                 display: block !important;
-                margin: 3px 0 !important;
+                margin: 6px auto 6px 0 !important;
+                text-align: left !important;
+            }
+            /* Option images/SVGs: always smaller than the question image
+               above, so the question's own image stays the visual focus. */
+            .opt-item img,
+            .opt-item svg {
+                width: 150px !important;
+                height: 100px !important;
+                max-width: 100% !important;
+                max-height: none !important;
+                object-fit: contain !important;
+                object-position: left top !important;
+                page-break-inside: avoid !important;
+                display: block !important;
+                margin: 4px auto 4px 0 !important;
+                text-align: left !important;
             }
             * {
                 -webkit-print-color-adjust: exact !important;
@@ -6918,7 +6964,24 @@
                 return `${TAG_OPEN}${protectedTags.length - 1}${TAG_CLOSE}`;
             });
 
-            str = str.replace(/\\text\{([^{}]*)\}/g, '$1');
+            // Fully unwrap \text{...} even when it's nested several layers
+            // deep (\text{\text{\text{X}}}) — content that has been through
+            // more than one broken export/print cycle accumulates these.
+            // The old single-pass replace() only ever stripped the
+            // innermost \text{...} (its [^{}]* can't match across an inner
+            // brace), leaving the outer \text{ ... } shells behind as
+            // orphaned, unbalanced TeX — which is exactly what produced
+            // MathJax's "Extra close brace or missing open brace" error
+            // text leaking into the page/PDF for badly-nested questions.
+            // Looping the same replace until it stops changing anything
+            // guarantees every layer is peeled off, however deep.
+            {
+                let prevText;
+                do {
+                    prevText = str;
+                    str = str.replace(/\\text\{([^{}]*)\}/g, '$1');
+                } while (str !== prevText);
+            }
             const PLACEHOLDER = "__RS_DOLLAR__";
             str = str.replace(/([a-zA-Z0-9])\$([a-zA-Z0-9])/g, `$1${PLACEHOLDER}$2`);
 
@@ -7104,6 +7167,30 @@
             // \( \) / \[ \] pass has already finished, so they always come
             // back exactly as they went in.
             str = str.replace(new RegExp(TAG_OPEN + '(\\d+)' + TAG_CLOSE, 'g'), (m, idx) => protectedTags[parseInt(idx, 10)]);
+
+            // Final safety net: any $...$ / $$...$$ span that still has
+            // unbalanced { } after everything above (source data that was
+            // already corrupted before it ever reached this function, e.g.
+            // from a prior broken PDF export that got re-typed/re-pasted)
+            // would otherwise reach MathJax as invalid TeX. MathJax's own
+            // failure mode for that is to print its literal error message
+            // ("Extra close brace or missing open brace" etc.) straight
+            // into the page as visible text, which is worse than showing
+            // the plain un-rendered numbers/symbols. So: count braces per
+            // math span, and if they don't balance, drop just the $ / $$
+            // delimiters (keep the inner text as-is) instead of handing
+            // broken TeX to MathJax.
+            function bracesBalanced(s) {
+                let depth = 0;
+                for (let i = 0; i < s.length; i++) {
+                    if (s[i] === '{') depth++;
+                    else if (s[i] === '}') { depth--; if (depth < 0) return false; }
+                }
+                return depth === 0;
+            }
+            str = str.replace(/\$\$([\s\S]*?)\$\$/g, (m, inner) => bracesBalanced(inner) ? m : inner);
+            str = str.replace(/\$([^$]*?)\$/g, (m, inner) => bracesBalanced(inner) ? m : inner);
+
             return str;
         };
 
