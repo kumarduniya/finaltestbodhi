@@ -10937,6 +10937,11 @@
             container.innerHTML = '';
             (window.chapterChartInstances || []).forEach(c => c && c.destroy());
             window.chapterChartInstances = [];
+            // Disabled: this whole "Chapter-wise Performance" section (title +
+            // per-subject chapter table) duplicated the "Topic-wise
+            // Performance" breakdown already shown above for the same
+            // subject, so it's intentionally left empty instead of rendered.
+            return;
             if (!questions || questions.length === 0) return;
 
             // Group by Subject -> Chapter using topicTag
