@@ -6980,6 +6980,18 @@
                 return out;
             }
 
+            // \left( ... \right) pairs get torn apart whenever a Hindi-labelled
+            // \frac sits between them — the frac is pulled out as its own HTML
+            // chunk, so \left and \right end up stranded in two separate math
+            // spans with no partner, which is exactly what produces MathJax's
+            // "Extra \left or missing \right" / "Missing \left or extra
+            // \right" errors. \left/\right only control bracket auto-sizing
+            // (purely cosmetic), so it's safe to drop them and keep the plain
+            // "(" / ")" characters wherever Hindi text is involved.
+            function stripLeftRight(s) {
+                return s.replace(/\\left/g, '').replace(/\\right/g, '');
+            }
+
             // Decides, per math span, whether to keep it as real TeX (for
             // MathJax), bypass entirely to plain HTML (Hindi-only content), or
             // — for a MIXED span that combines Hindi labels with genuine Latin
@@ -6998,7 +7010,7 @@
 
                 if (!hasLatinMathVar(innerMath)) {
                     // Hindi-only span — bypass entirely to native HTML.
-                    let out = stripEnvironment(innerMath);
+                    let out = stripLeftRight(stripEnvironment(innerMath));
                     out = out.replace(/\\frac\{([^{}]*)\}\{([^{}]*)\}/g, (m, a, b) => htmlFrac(a, b));
                     out = plainSymbols(out);
                     out = out.split(BR_MARK).map(p => p.trim()).filter(p => p !== '').join('<br>');
@@ -7006,7 +7018,7 @@
                 }
 
                 // Mixed span: Hindi labels + real Latin math variables.
-                let working = stripEnvironment(innerMath);
+                let working = stripLeftRight(stripEnvironment(innerMath));
 
                 // Protect Hindi-labelled fractions first (as a whole unit),
                 // so the phrase-splitter below doesn't try to only grab the
