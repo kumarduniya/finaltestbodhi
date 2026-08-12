@@ -6946,6 +6946,26 @@
             if (!text) return text;
             let str = String(text);
 
+            // SAFETY NET (Aug 2026): !T (topic-tag) and !tag(...) lines are pure
+            // metadata — they're never shown through MathJax, so they must never
+            // be touched by the Hindi/math wrapping below. Whole-blob calls to
+            // sanitizeMath() have historically slipped in here and there (test
+            // edit-load, PDF export, etc.) and every time one did, it wrapped the
+            // Hindi text on a "!T गणित :: ..." line in \text{...} and then pulled
+            // the space right after "!T" INSIDE those braces — turning it into
+            // "!T\text{ गणित :: ...}", which breaks the parser's "^!T " match and
+            // silently drops the question into the wrong My Report category. This
+            // line-level guard makes that entire class of bug structurally
+            // impossible going forward, no matter what calls sanitizeMath() on a
+            // full raw blob by mistake — tag lines are pulled out before any
+            // processing and stitched back in completely untouched at the end.
+            const PROTECT_RE = /^[ \t]*(!T\s.*|!tag\([^)]*\).*)$/gim;
+            const protectedLines = [];
+            str = str.replace(PROTECT_RE, (m) => {
+                const idx = protectedLines.push(m) - 1;
+                return `__RS_PROTECT_${idx}__`;
+            });
+
             // Protect <img ...> and <svg>...</svg> tags BEFORE any $ math
             // processing runs. If a question's image/diagram markup happens
             // to sit between two $ signs used elsewhere in the same field,
@@ -7151,6 +7171,12 @@
             // \( \) / \[ \] pass has already finished, so they always come
             // back exactly as they went in.
             str = str.replace(new RegExp(TAG_OPEN + '(\\d+)' + TAG_CLOSE, 'g'), (m, idx) => protectedTags[parseInt(idx, 10)]);
+
+            // Restore !T / !tag(...) lines exactly as they were, untouched.
+            protectedLines.forEach((original, idx) => {
+                str = str.replace(`__RS_PROTECT_${idx}__`, original);
+            });
+
             return str;
         };
 
@@ -10028,7 +10054,11 @@
             if (storedQs.length === 0) {
                 let raw = t.rawText || "";
                 if (!raw) return window.showCustomAlert("Empty Test", "No questions to print!", "❌");
-                raw = window.sanitizeMath(raw);
+                // FIX (Aug 2026): don't run sanitizeMath() on the whole raw
+                // structural text before it's parsed — it corrupts "!T ..."
+                // topic-tag lines (see sanitizeMath's own !T safety-net
+                // comment above). sanitizeQuestions() already sanitizes each
+                // parsed field individually, which is the correct place.
                 window.showLoadingModal("Preparing PDF...<br><i>Please wait...</i>");
                 storedQs = await window.parseRawQuestionsRemote(raw);
                 window.closeModal();
@@ -12889,8 +12919,10 @@
             if (data.error) return window.showCustomAlert("Error", "Test data missing.", "❌");
             let raw = data.rawText || "";
             if (data.questions) { data.questions = window.sanitizeQuestions(data.questions); }
-            if (raw) { raw = window.sanitizeMath(raw);
-                data.rawText = raw; }
+            // FIX (Aug 2026): don't run sanitizeMath() on the whole raw
+            // structural text — it corrupts "!T ..." topic-tag lines. This
+            // function uses data.questions (already sanitized above) for
+            // rendering anyway, so raw doesn't need touching at all here.
             const storedQs = data.questions || [];
             const oldExam = window.examData;
             // Build the tagged question list directly from the already-structured
