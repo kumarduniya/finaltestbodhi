@@ -3397,17 +3397,21 @@
             cursor:pointer;
         }
         #category-review-view .crv-content {
-            width:min(980px,100%);
-            margin:0 auto;
-            padding:14px;
+            width:100% !important;
+            max-width:none !important;
+            margin:0;
+            padding:12px 14px 20px;
             box-sizing:border-box;
         }
         #category-review-view .crv-card {
+            width:100%;
+            max-width:none;
+            box-sizing:border-box;
             background:var(--bg-card);
             border:1px solid var(--border-color);
             border-radius:14px;
             box-shadow:var(--shadow-md);
-            padding:16px;
+            padding:14px 18px 18px;
         }
         #category-review-view .crv-meta {
             display:flex;
@@ -3418,10 +3422,10 @@
             flex-wrap:wrap;
         }
         #category-review-view .crv-question {
-            font-size:18px;
+            font-size:16px;
             font-weight:700;
-            line-height:1.65;
-            margin-bottom:12px;
+            line-height:1.55;
+            margin-bottom:10px;
         }
         #category-review-view .crv-options {
             display:grid;
@@ -3430,34 +3434,34 @@
             margin-top:10px;
         }
         #category-review-view .crv-opt {
-            padding:10px 12px;
+            padding:9px 12px;
             border:1px solid var(--border-color);
             border-radius:10px;
             background:var(--bg-subtle);
-            font-size:14px;
-            line-height:1.5;
+            font-size:13px;
+            line-height:1.45;
         }
         #category-review-view .crv-solution-btn {
             width:100%;
-            margin-top:14px;
-            min-height:46px;
+            margin-top:12px;
+            min-height:42px;
             border:0;
-            border-radius:11px;
+            border-radius:10px;
             background:var(--accent);
             color:#111;
-            font-size:15px;
+            font-size:14px;
             font-weight:900;
             cursor:pointer;
         }
         #category-review-view .crv-solution {
             display:none;
-            margin-top:10px;
+            margin-top:9px;
             background:var(--bg-subtle);
             border-left:4px solid var(--accent);
             border-radius:10px;
-            padding:13px 14px;
-            font-size:14px;
-            line-height:1.75;
+            padding:12px 14px;
+            font-size:13px;
+            line-height:1.65;
         }
         #category-review-view .crv-nav {
             display:flex;
@@ -3466,18 +3470,18 @@
         }
         #category-review-view .crv-nav button {
             flex:1;
-            min-height:46px;
-            border-radius:11px;
+            min-height:42px;
+            border-radius:10px;
             border:1px solid var(--border-color);
             background:var(--bg-card);
             color:var(--text-main);
-            font-size:14px;
+            font-size:13px;
             font-weight:800;
             cursor:pointer;
         }
         @media (max-width:700px){
             #category-review-view .crv-options{grid-template-columns:1fr;}
-            #category-review-view .crv-question{font-size:16px;}
+            #category-review-view .crv-question{font-size:15px;}
             #analysis-btn-container .btn{min-width:0; flex:1 1 100%;}
         }
 
@@ -12044,7 +12048,7 @@
         // ==========================================================================
         // FULL-PAGE CORRECT / WRONG / BLANK REVIEW
         // ==========================================================================
-        window.categoryReview = { items: [], index: 0, type: "" };
+        window.categoryReview = { items: [], index: 0, type: "", solutionAutoOpen: false };
 
         window.openCategoryReview = function(type) {
             const questions = window.examData?.questions || [];
@@ -12060,7 +12064,7 @@
                     items.push({ q, originalIndex:i, uAns:u, isRight, isBlank });
                 }
             });
-            window.categoryReview = { items, index:0, type };
+            window.categoryReview = { items, index:0, type, solutionAutoOpen:false };
             const view = document.getElementById('category-review-view');
             if (!view) return;
             view.style.display = 'block';
@@ -12098,8 +12102,9 @@
             const sol = document.getElementById('crv-solution');
             const solBtn = document.getElementById('crv-solution-btn');
             sol.innerHTML = q.exp && q.exp.trim() ? q.exp : '<span style="color:var(--text-muted);">इस प्रश्न का solution उपलब्ध नहीं है।</span>';
-            sol.style.display='none';
-            solBtn.textContent='💡 Solution';
+            const autoOpen = !!data.solutionAutoOpen;
+            sol.style.display = autoOpen ? 'block' : 'none';
+            solBtn.textContent = autoOpen ? '🔽 Hide Solution' : '💡 Solution';
             const prev=document.getElementById('crv-prev');
             const next=document.getElementById('crv-next');
             prev.disabled=data.index===0;
@@ -12111,6 +12116,14 @@
             if (window.MathJax && typeof window.typesetMath === 'function') {
                 window.typesetMath(document.getElementById('crv-card')).catch(()=>{});
             }
+            // Once the student chooses to view a solution, keep solutions open
+            // automatically as they move through the selected category.
+            if (autoOpen) {
+                const visibleSol = document.getElementById('crv-solution');
+                if (visibleSol) {
+                    setTimeout(() => visibleSol.scrollIntoView({behavior:'smooth', block:'nearest'}), 50);
+                }
+            }
         };
 
         window.toggleCategorySolution = function() {
@@ -12118,9 +12131,18 @@
             const btn=document.getElementById('crv-solution-btn');
             if (!sol || !btn) return;
             const open=sol.style.display==='block';
-            sol.style.display=open?'none':'block';
-            btn.textContent=open?'💡 Solution':'🔽 Hide Solution';
-            if (!open && window.MathJax && typeof window.typesetMath==='function') window.typesetMath(sol).catch(()=>{});
+            if (!open) {
+                // Student explicitly requested a solution: automatically open it
+                // for every following question in this review session.
+                window.categoryReview.solutionAutoOpen = true;
+                sol.style.display='block';
+                btn.textContent='🔽 Hide Solution';
+                if (window.MathJax && typeof window.typesetMath==='function') window.typesetMath(sol).catch(()=>{});
+                setTimeout(() => sol.scrollIntoView({behavior:'smooth', block:'nearest'}), 50);
+            } else {
+                sol.style.display='none';
+                btn.textContent='💡 Solution';
+            }
         };
 
         window.prevCategoryReview = function() {
