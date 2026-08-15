@@ -210,24 +210,50 @@
             display: block;
             margin:5px 0;
         }
+        /* =====================================================================
+           QUESTION MEDIA SIZE
+           Keep all question images/SVG diagrams compact and consistent on the
+           student exam screen so students do not need excessive scrolling.
+           PDF/print media has its own rules below and is intentionally untouched.
+           ===================================================================== */
         .q-text img,
-        .opt-label img,
-        .q-passage-box img,
-        .analysis-box img,
         .q-text svg,
-        .opt-label svg,
+        .q-passage-box img,
         .q-passage-box svg,
-        .analysis-box svg {
-            border-radius:5px;
-            max-height: 420px;
-            max-width: 100%;
-            width: auto;
-            height: auto;
-            object-fit: contain;
+        .analysis-box img,
+        .analysis-box svg,
+        .opt-label img,
+        .opt-label svg {
+            box-sizing: border-box !important;
+            width: 360px !important;
+            height: 230px !important;
+            max-width: 100% !important;
+            max-height: 230px !important;
+            object-fit: contain !important;
             display: block !important;
             margin: 5px 0 !important;
             margin-left: 0 !important;
+            margin-right: 0 !important;
             float: none !important;
+            border-radius: 5px;
+        }
+
+        /* On smaller screens keep the same compact footprint but reduce height
+           so a diagram never consumes too much of the visible question area. */
+        @media (max-width: 700px) {
+            .q-text img,
+            .q-text svg,
+            .q-passage-box img,
+            .q-passage-box svg,
+            .analysis-box img,
+            .analysis-box svg,
+            .opt-label img,
+            .opt-label svg {
+                width: 100% !important;
+                height: 200px !important;
+                max-width: 100% !important;
+                max-height: 200px !important;
+            }
         }
         .q-text table,
         .q-passage-box table,
