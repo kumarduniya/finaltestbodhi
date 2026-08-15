@@ -7407,6 +7407,36 @@
             if (!text) return text;
             let str = String(text);
 
+            // ===================================================================
+            // UNIVERSAL CURRENCY / DOLLAR SAFETY
+            // ===================================================================
+            // Numeric dollar amounts such as "$5", "$33170" and "$33,170.50"
+            // are currency, not MathJax delimiters. We normalize only clearly
+            // numeric currency so real math like $x+5$, $SP_1$, $\frac{a}{b}$
+            // and $$...$$ remains untouched. Escaped \$ inside math also stays.
+            // ===================================================================
+            function normalizeNumericDollarCurrency(input) {
+                let s = String(input || '');
+
+                // Paired numeric amount: $33170$ -> ₹33170
+                s = s.replace(
+                    /(?<!\\)\$(\d[\d,]*(?:\.\d+)?)\$(?!\$)/g,
+                    '₹$1'
+                );
+
+                // Unpaired numeric amount: $5 -> ₹5.
+                // $5x is not rewritten because the next character is a Latin
+                // letter; this protects genuine variable-based math.
+                s = s.replace(
+                    /(?<![\$\\])\$(\d[\d,]*(?:\.\d+)?)(?![\$\dA-Za-z_])/g,
+                    '₹$1'
+                );
+
+                return s;
+            }
+
+            str = normalizeNumericDollarCurrency(str);
+
             // Metadata lines are never math.
             const protectedLines = [];
             str = str.replace(/^[ \t]*(!T\s.*|!tag\([^)]*\).*)$/gim, (m) => {
