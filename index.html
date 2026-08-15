@@ -7414,6 +7414,23 @@
                 return `__MATH_META_${i}__`;
             });
 
+            // -----------------------------------------------------------------
+            // Protect dollar-denominated numeric amounts written as $33170$ /
+            // $33,170.50$ when the dollar signs are being used as a CURRENCY
+            // notation rather than MathJax delimiters. This is intentionally
+            // narrow: it only catches a plain numeric amount between dollars.
+            // Real math such as $SP_1$, $\\frac{a}{b}$ and $\\sqrt{x}$
+            // is left completely untouched.
+            //
+            // Explicit math-currency such as $\$33170$ is also left untouched
+            // because the inner dollar is escaped.
+            // -----------------------------------------------------------------
+            const protectedDollarAmounts = [];
+            str = str.replace(/(^|[^$\\])\$([0-9][0-9,]*(?:\.[0-9]+)?)\$(?!\$)/g, (full, prefix, amount) => {
+                const idx = protectedDollarAmounts.push(amount) - 1;
+                return `${prefix}__MATH_CURRENCY_${idx}__`;
+            });
+
             // Protect real HTML already present in question content.
             const protectedTags = [];
             str = str.replace(/<svg[\s\S]*?<\/svg>/gi, (m) => {
@@ -7641,6 +7658,9 @@
             });
             protectedLines.forEach((original, i) => {
                 str = str.replace(`__MATH_META_${i}__`, original);
+            });
+            protectedDollarAmounts.forEach((amount, i) => {
+                str = str.replace(`__MATH_CURRENCY_${i}__`, `$${amount}`);
             });
 
             return str;
