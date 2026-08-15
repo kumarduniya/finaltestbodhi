@@ -5162,6 +5162,88 @@
             display: inline;
             font-family: var(--font-sans);
             margin:0 2px;
+            line-height:1.45;
+            vertical-align:middle;
+            white-space:normal;
+        }
+        .mixed-math-inline {
+            display:inline-flex;
+            align-items:center;
+            flex-wrap:wrap;
+            gap:1px;
+            vertical-align:middle;
+            line-height:1.5;
+        }
+        .mixed-math-display {
+            width:100%;
+            display:flex;
+            align-items:center;
+            justify-content:center;
+            flex-wrap:wrap;
+            gap:2px;
+            margin:6px 0;
+            line-height:1.5;
+            text-align:center;
+            overflow:visible !important;
+        }
+        .mixed-math-fragment {
+            display:inline-block;
+            vertical-align:middle;
+            overflow:visible !important;
+            white-space:nowrap;
+        }
+        .hindi-frac {
+            display:inline-flex;
+            flex-direction:column;
+            align-items:center;
+            justify-content:center;
+            vertical-align:middle;
+            margin:0 3px;
+            line-height:1.2;
+            white-space:nowrap;
+            overflow:visible !important;
+        }
+        .hindi-frac .hf-num,
+        .hindi-frac .hf-den {
+            display:block;
+            line-height:1.35;
+            white-space:nowrap;
+        }
+        .hindi-frac .hf-num {
+            padding:0 4px 3px;
+            border-bottom:1.5px solid currentColor;
+        }
+        .hindi-frac .hf-den {
+            padding:3px 4px 0;
+        }
+        .mixed-math-display .MathJax,
+        .mixed-math-inline .MathJax,
+        .mixed-math-display mjx-container,
+        .mixed-math-inline mjx-container {
+            overflow:visible !important;
+            max-width:none !important;
+        }
+
+        /* Hindi + Math anti-clipping: MathJax itself must never clip the
+           line box when a native Devanagari span sits beside an equation. */
+        .analysis-box .MathJax,
+        .sq-questions-list .MathJax,
+        .print-q .MathJax,
+        .q-text .MathJax,
+        .opt-label .MathJax,
+        .q-passage-box .MathJax,
+        .analysis-box mjx-container,
+        .sq-questions-list mjx-container,
+        .print-q mjx-container,
+        .q-text mjx-container,
+        .opt-label mjx-container,
+        .q-passage-box mjx-container {
+            overflow: visible !important;
+            max-width: none !important;
+        }
+        .print-q .mixed-math-display {
+            break-inside: avoid;
+            page-break-inside: avoid;
         }
 
         /* ============================================================
@@ -6991,22 +7073,27 @@
         };
 
         /* =====================================================================
-           SAFE MATH SANITIZER
-           Keep valid TeX intact. Only clean accidental corruption and escape
-           characters that have special meaning inside TeX math mode.
+           SAFE + HINDI-AWARE MATH SANITIZER
+
+           IMPORTANT:
+           - Pure LaTeX/math stays as real MathJax.
+           - Hindi inside MathJax is pulled into native HTML so Devanagari
+             glyphs never get clipped by MathJax's TeX text font metrics.
+           - Hindi-labelled fractions are rendered as native HTML fractions.
+           - The Cloudflare Worker remains the source of the original TeX.
            ===================================================================== */
         window.sanitizeMath = function(text) {
             if (!text) return text;
             let str = String(text);
 
-            // Preserve metadata lines completely untouched.
+            // Metadata lines are never math.
             const protectedLines = [];
             str = str.replace(/^[ \t]*(!T\s.*|!tag\([^)]*\).*)$/gim, (m) => {
                 const i = protectedLines.push(m) - 1;
                 return `__MATH_META_${i}__`;
             });
 
-            // Protect raw HTML tags from math processing.
+            // Protect real HTML already present in question content.
             const protectedTags = [];
             str = str.replace(/<svg[\s\S]*?<\/svg>/gi, (m) => {
                 const i = protectedTags.push(m) - 1;
@@ -7017,49 +7104,215 @@
                 return `__MATH_TAG_${i}__`;
             });
 
-            // Remove only accidental \text{...} wrappers that exist OUTSIDE
-            // math spans. Legitimate \text{...} inside math is preserved.
             const MATH_RE = /(\$\$[\s\S]*?\$\$|\$[^$\n]*?\$|\\\([\s\S]*?\\\)|\\\[[\s\S]*?\\\])/g;
+
+            // Remove accidental \text{...} ONLY outside math.
             const parts = str.split(MATH_RE);
             for (let i = 0; i < parts.length; i += 2) {
-                let p = parts[i];
-                if (!p || !p.includes('\\text{')) continue;
+                let plain = parts[i];
+                if (!plain || plain.indexOf('\\text{') === -1) continue;
                 let prev;
                 do {
-                    prev = p;
-                    p = p.replace(/\\text\{([^{}]*)\}/g, '$1');
-                } while (p !== prev);
-                parts[i] = p;
+                    prev = plain;
+                    plain = plain.replace(/\\text\{([^{}]*)\}/g, '$1');
+                } while (plain !== prev);
+                parts[i] = plain;
             }
 
-            function cleanMathInner(inner) {
-                let m = inner;
-                // Flatten only historical nested \text corruption.
-                let prev;
-                do {
-                    prev = m;
-                    m = m.replace(/\\text\{\\text\{([^{}]*)\}\}/g, '\\text{$1}');
-                } while (m !== prev);
+            const HINDI_RE = /[\u0900-\u097F]/;
 
-                // A bare % starts a TeX comment; escape it unless already escaped.
-                m = m.replace(/\\%/g, '__ESC_PERCENT__').replace(/%/g, '\\%').replace(/__ESC_PERCENT__/g, '\\%');
-                // ₹ is not reliably parsed as TeX; keep it as literal text.
+            function escapeMath(inner) {
+                let m = String(inner || '');
+                m = m.replace(/\\%/g, '__ESC_PERCENT__')
+                     .replace(/%/g, '\\%')
+                     .replace(/__ESC_PERCENT__/g, '\\%');
+                // Keep ₹ safe inside real TeX.
                 m = m.replace(/₹/g, '\\text{₹}');
                 return m;
             }
 
+            function readGroup(source, openIndex) {
+                if (source[openIndex] !== '{') return null;
+                let depth = 0;
+                for (let i = openIndex; i < source.length; i++) {
+                    const ch = source[i];
+                    if (ch === '{') depth++;
+                    else if (ch === '}') {
+                        depth--;
+                        if (depth === 0) {
+                            return {
+                                value: source.slice(openIndex + 1, i),
+                                end: i + 1
+                            };
+                        }
+                    }
+                }
+                return null;
+            }
+
+            function unwrapTextCommands(v) {
+                let out = String(v || '').trim();
+                let changed = true;
+                while (changed) {
+                    const before = out;
+                    out = out.replace(/\\text\{([^{}]*)\}/g, '$1');
+                    changed = out !== before;
+                }
+                return out
+                    .replace(/\\left/g, '')
+                    .replace(/\\right/g, '')
+                    .replace(/\\times/g, '×')
+                    .replace(/\\cdot/g, '×')
+                    .replace(/\\div/g, '÷')
+                    .replace(/\\leq/g, '≤')
+                    .replace(/\\geq/g, '≥')
+                    .replace(/\\neq/g, '≠')
+                    .replace(/\\pm/g, '±')
+                    .replace(/\\approx/g, '≈')
+                    .replace(/\\propto/g, '∝')
+                    .replace(/\\,/g, ' ')
+                    .replace(/\\;/g, ' ')
+                    .replace(/\\ /g, ' ')
+                    .replace(/\s{2,}/g, ' ')
+                    .trim();
+            }
+
+            function makeHindiFraction(numer, denom) {
+                return `<span class="hindi-frac" role="presentation"><span class="hf-num">${renderNativeMathPart(numer)}</span><span class="hf-den">${renderNativeMathPart(denom)}</span></span>`;
+            }
+
+            function renderNativeMathPart(value) {
+                const v = unwrapTextCommands(value);
+
+                // Most Hindi-labelled fraction parts are text labels. If a part
+                // contains a small amount of actual TeX as well, render that
+                // portion through an inline MathJax fragment while keeping Hindi
+                // native. This avoids putting Devanagari back inside \text{}.
+                if (/[\\][a-zA-Z]+|\^|_/.test(v) && HINDI_RE.test(v)) {
+                    const sub = renderMixedInner(v, false);
+                    return sub;
+                }
+
+                return v
+                    .replace(/</g, '&lt;')
+                    .replace(/>/g, '&gt;');
+            }
+
+            function renderMixedInner(inner, displayMode) {
+                let working = String(inner || '');
+
+                // Drop only cosmetic left/right commands in a mixed expression.
+                working = working.replace(/\\left/g, '').replace(/\\right/g, '');
+
+                const htmlChunks = [];
+                let chunkId = 0;
+                const HFRAC = /\\(?:dfrac|tfrac|frac)\s*\{/g;
+
+                // Convert ONLY fractions whose numerator or denominator contains
+                // Hindi. Pure math fractions stay untouched and remain MathJax.
+                let out = '';
+                let cursor = 0;
+                let match;
+                while ((match = HFRAC.exec(working)) !== null) {
+                    const commandStart = match.index;
+                    const afterCommand = HFRAC.lastIndex;
+                    const a = readGroup(working, afterCommand - 1);
+                    if (!a) continue;
+                    let pos = a.end;
+                    while (/\s/.test(working[pos] || '')) pos++;
+                    const b = readGroup(working, pos);
+                    if (!b) continue;
+
+                    const whole = working.slice(commandStart, b.end);
+                    if (!HINDI_RE.test(a.value) && !HINDI_RE.test(b.value)) {
+                        HFRAC.lastIndex = b.end;
+                        continue;
+                    }
+
+                    htmlChunks.push(makeHindiFraction(a.value, b.value));
+                    out += working.slice(cursor, commandStart);
+                    out += `__HFRAC_${chunkId}__`;
+                    chunkId++;
+                    cursor = b.end;
+                    HFRAC.lastIndex = b.end;
+                }
+                out += working.slice(cursor);
+                working = out;
+
+                // Replace Hindi-containing \text{...} blocks with native HTML.
+                const H_TEXT_RE = /\\text\{([^{}]*)\}/g;
+                const textChunks = [];
+                working = working.replace(H_TEXT_RE, (full, content) => {
+                    if (!HINDI_RE.test(content)) return full;
+                    const idx = textChunks.push(
+                        `<span class="hindi-inline" lang="hi">${String(content).replace(/</g, '&lt;').replace(/>/g, '&gt;')}</span>`
+                    ) - 1;
+                    return `__HITEXT_${idx}__`;
+                });
+
+                const tokenRe = /(__HFRAC_\d+__|__HITEXT_\d+__)/g;
+                const pieces = working.split(tokenRe);
+                let html = '';
+
+                for (const piece of pieces) {
+                    if (!piece) continue;
+
+                    const frac = piece.match(/^__HFRAC_(\d+)__$/);
+                    if (frac) {
+                        html += htmlChunks[parseInt(frac[1], 10)] || '';
+                        continue;
+                    }
+
+                    const txt = piece.match(/^__HITEXT_(\d+)__$/);
+                    if (txt) {
+                        html += textChunks[parseInt(txt[1], 10)] || '';
+                        continue;
+                    }
+
+                    // Remaining pieces are genuine math. Keep them as small
+                    // MathJax fragments so normal fractions, powers, brackets,
+                    // variables, etc. retain textbook-quality typesetting.
+                    const clean = escapeMath(piece).trim();
+                    if (!clean) continue;
+                    html += `<span class="mixed-math-fragment">$${clean}$</span>`;
+                }
+
+                if (!html) return escapeMath(inner);
+
+                if (displayMode) {
+                    return `<div class="mixed-math-display">${html}</div>`;
+                }
+                return `<span class="mixed-math-inline">${html}</span>`;
+            }
+
             for (let i = 1; i < parts.length; i += 2) {
-                const p = parts[i];
-                if (p.startsWith('$$') && p.endsWith('$$')) {
-                    parts[i] = '$$' + cleanMathInner(p.slice(2, -2)) + '$$';
-                } else if (p.startsWith('$') && p.endsWith('$')) {
-                    parts[i] = '$' + cleanMathInner(p.slice(1, -1)) + '$';
-                } else if (p.startsWith('\\(') && p.endsWith('\\)')) {
-                    parts[i] = '\\(' + cleanMathInner(p.slice(2, -2)) + '\\)';
-                } else if (p.startsWith('\\[') && p.endsWith('\\]')) {
-                    parts[i] = '\\[' + cleanMathInner(p.slice(2, -2)) + '\\]';
+                const rawSpan = parts[i];
+                if (!rawSpan) continue;
+
+                let open = '', close = '', inner = '';
+                if (rawSpan.startsWith('$$') && rawSpan.endsWith('$$')) {
+                    open = '$$'; close = '$$'; inner = rawSpan.slice(2, -2);
+                } else if (rawSpan.startsWith('$') && rawSpan.endsWith('$')) {
+                    open = '$'; close = '$'; inner = rawSpan.slice(1, -1);
+                } else if (rawSpan.startsWith('\\(') && rawSpan.endsWith('\\)')) {
+                    open = '\\('; close = '\\)'; inner = rawSpan.slice(2, -2);
+                } else if (rawSpan.startsWith('\\[') && rawSpan.endsWith('\\]')) {
+                    open = '\\['; close = '\\]'; inner = rawSpan.slice(2, -2);
+                } else {
+                    parts[i] = rawSpan;
+                    continue;
+                }
+
+                // Pure math: preserve it almost completely untouched.
+                if (!HINDI_RE.test(inner)) {
+                    parts[i] = open + escapeMath(inner) + close;
+                } else {
+                    // Hindi + math: split the Hindi out of MathJax, preventing
+                    // Devanagari glyph clipping while retaining TeX for real math.
+                    parts[i] = renderMixedInner(inner, open === '$$' || open === '\\[');
                 }
             }
+
             str = parts.join('');
 
             protectedTags.forEach((original, i) => {
