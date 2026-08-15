@@ -3357,13 +3357,16 @@
             inset:0;
             z-index:1000000000;
             background:var(--bg-container);
-            overflow-y:auto;
+            overflow:hidden !important;
             -webkit-overflow-scrolling:touch;
+            box-sizing:border-box;
         }
         #category-review-view .crv-shell {
-            min-height:100vh;
+            height:100vh;
+            min-height:0;
             display:flex;
             flex-direction:column;
+            overflow:hidden;
         }
         #category-review-view .crv-header {
             position:sticky;
@@ -3400,8 +3403,12 @@
             width:100% !important;
             max-width:none !important;
             margin:0;
-            padding:8px 10px 14px;
+            padding:8px 10px 10px;
             box-sizing:border-box;
+            flex:1 1 auto;
+            min-height:0;
+            overflow:hidden;
+            display:flex;
         }
         #category-review-view .crv-card {
             width:100%;
@@ -3411,7 +3418,18 @@
             border:1px solid var(--border-color);
             border-radius:10px;
             box-shadow:var(--shadow-sm);
-            padding:9px 12px 12px;
+            padding:8px 12px 10px;
+            display:flex;
+            flex-direction:column;
+            min-height:0;
+            height:100%;
+            overflow:hidden;
+        }
+        #category-review-view .crv-meta,
+        #category-review-view .crv-question,
+        #category-review-view .crv-options,
+        #category-review-view .crv-passage {
+            flex:0 0 auto;
         }
         #category-review-view .crv-meta {
             display:flex;
@@ -3462,11 +3480,17 @@
             padding:10px 12px;
             font-size:12px;
             line-height:1.55;
-            max-height:300px;
+            flex:1 1 auto;
+            min-height:0;
+            max-height:none;
             overflow-y:auto;
             overflow-x:hidden;
             overscroll-behavior:contain;
             -webkit-overflow-scrolling:touch;
+            box-sizing:border-box;
+        }
+        #category-review-view .crv-solution-btn {
+            flex:0 0 auto;
         }
         #category-review-view .crv-nav {
             display:flex;
@@ -3474,6 +3498,7 @@
             margin:8px 0 7px;
             position:relative;
             z-index:3;
+            flex:0 0 auto;
         }
         #category-review-view .crv-nav button {
             flex:1;
@@ -3491,6 +3516,9 @@
             opacity:.45 !important;
         }
         @media (max-width:700px){
+            #category-review-view .crv-content{padding:6px;}
+            #category-review-view .crv-card{padding:7px 9px 9px;}
+            #category-review-view .crv-solution{font-size:11px; line-height:1.5;}
             #category-review-view .crv-options{grid-template-columns:1fr;}
             #category-review-view .crv-question{font-size:15px;}
             #analysis-btn-container .btn{min-width:0; flex:1 1 100%;}
@@ -12116,6 +12144,9 @@
             const autoOpen = !!data.solutionAutoOpen;
             sol.style.display = autoOpen ? 'block' : 'none';
             solBtn.textContent = autoOpen ? '🔽 Hide Solution' : '💡 Solution';
+            // Keep the question fixed in place. When moving to another question,
+            // start its own solution area from the top instead of moving the page.
+            sol.scrollTop = 0;
             const prev=document.getElementById('crv-prev');
             const next=document.getElementById('crv-next');
             prev.disabled=data.index===0;
