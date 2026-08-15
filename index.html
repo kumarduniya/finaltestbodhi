@@ -4412,6 +4412,51 @@
             color: var(--text-main);
             font-size:11px;
         }
+
+        /* ============================================================
+           MY REPORT QUESTION IMAGES / SVGs
+           Keep every question image compact so students can see the
+           question + options without excessive vertical scrolling.
+           This applies only inside My Report and does NOT change PDF
+           print sizing. Inline SVG styles such as width:100% /
+           max-width:450px are intentionally overridden here.
+           ============================================================ */
+        .sq-question img,
+        .sq-question svg,
+        .sq-passage-text img,
+        .sq-passage-text svg,
+        .sq-solution-text img,
+        .sq-solution-text svg,
+        .sq-questions-list .sq-opt-chip img,
+        .sq-questions-list .sq-opt-chip svg {
+            display: block !important;
+            width: auto !important;
+            max-width: 360px !important;
+            max-height: 220px !important;
+            height: auto !important;
+            object-fit: contain !important;
+            margin: 5px 0 !important;
+        }
+
+        .sq-question img,
+        .sq-question svg {
+            margin-left: 0 !important;
+            margin-right: auto !important;
+        }
+
+        @media (max-width: 600px) {
+            .sq-question img,
+            .sq-question svg,
+            .sq-passage-text img,
+            .sq-passage-text svg,
+            .sq-solution-text img,
+            .sq-solution-text svg,
+            .sq-questions-list .sq-opt-chip img,
+            .sq-questions-list .sq-opt-chip svg {
+                max-width: 100% !important;
+                max-height: 180px !important;
+            }
+        }
         .sq-options-row {
             display: grid;
             grid-template-columns: repeat(4, 1fr);
