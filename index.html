@@ -3471,18 +3471,24 @@
         #category-review-view .crv-nav {
             display:flex;
             gap:6px;
-            margin-top:9px;
+            margin:8px 0 7px;
+            position:relative;
+            z-index:3;
         }
         #category-review-view .crv-nav button {
             flex:1;
-            min-height:36px;
+            min-height:34px;
             border-radius:8px;
             border:1px solid var(--border-color);
             background:var(--bg-card);
             color:var(--text-main);
-            font-size:12px;
+            font-size:11px;
             font-weight:800;
             cursor:pointer;
+        }
+        #category-review-view .crv-nav button:disabled {
+            cursor:not-allowed;
+            opacity:.45 !important;
         }
         @media (max-width:700px){
             #category-review-view .crv-options{grid-template-columns:1fr;}
@@ -6420,12 +6426,12 @@
                     <div id="crv-passage"></div>
                     <div class="crv-question" id="crv-question"></div>
                     <div class="crv-options" id="crv-options"></div>
-                    <button class="crv-solution-btn" id="crv-solution-btn" onclick="window.toggleCategorySolution()">💡 Solution</button>
-                    <div class="crv-solution" id="crv-solution"></div>
                     <div class="crv-nav">
                         <button id="crv-prev" onclick="window.prevCategoryReview()">◀ Previous</button>
                         <button id="crv-next" onclick="window.nextCategoryReview()">Next ▶</button>
                     </div>
+                    <button class="crv-solution-btn" id="crv-solution-btn" onclick="window.toggleCategorySolution()">💡 Solution</button>
+                    <div class="crv-solution" id="crv-solution"></div>
                 </div>
             </div>
         </div>
