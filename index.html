@@ -11476,6 +11476,13 @@
                 timeSpent: window.totalTimeSpent,
                 timestamp: Date.now(),
                 weakQuestions: weakQs,   // <-- NEW: store weak questions
+                // Persist the exact tag-wise performance generated at submission time.
+                // This allows My Report -> View Result to rebuild the SAME subject/topic
+                // graphs later, even after the test is no longer open.
+                analytics: {
+                    tagPerformance: tagPerformance,
+                    allTags: allTags
+                },
                 roomId: activeRoomId, // links this attempt to a "Play with Friends" room, if any
                 // Snapshot of the test's `updatedAt` at the moment this was
                 // attempted. If the admin later edits & re-saves this test,
@@ -12777,6 +12784,94 @@
            shown inaccurately. Score, Rank, and Leaderboard are all populated
            for real from the database, exactly like a fresh submission.
            ========================================================================== */
+        // Build historical graph data. New attempts have the exact analytics snapshot
+        // saved in result.analytics. Older attempts (created before this field existed)
+        // fall back to a proportional distribution across the test's tagged questions,
+        // so the graph still appears instead of remaining blank.
+        window.buildHistoricalAnalytics = function(record, testData) {
+            if (record && record.analytics && record.analytics.tagPerformance) {
+                return {
+                    tagPerformance: record.analytics.tagPerformance || {},
+                    allTags: Array.isArray(record.analytics.allTags) ? record.analytics.allTags : Object.keys(record.analytics.tagPerformance || {}),
+                    exact: true
+                };
+            }
+
+            const questions = (testData && Array.isArray(testData.questions)) ? testData.questions : [];
+            const tagCounts = {};
+            const tags = [];
+
+            questions.forEach((q, idx) => {
+                const legacyTag = q.tag || testData.tags?.[idx] || "";
+                const topicTagVal = (q.topicTag || "").trim();
+                const ttParts = topicTagVal ? topicTagVal.split("::").map(s => s.trim()).filter(Boolean) : [];
+                let tag = "";
+                if (ttParts.length >= 2) {
+                    tag = ttParts[0] + ":" + ttParts[1];
+                } else if (ttParts.length === 1) {
+                    tag = ttParts[0];
+                } else {
+                    tag = legacyTag || "General";
+                }
+                if (!tag || tag === "General" || /\d{2}\/\d{2}\/\d{4}/.test(tag)) return;
+                if (!tagCounts[tag]) tagCounts[tag] = 0;
+                tagCounts[tag]++;
+                if (!tags.includes(tag)) tags.push(tag);
+            });
+
+            const totalTagged = Object.values(tagCounts).reduce((a,b) => a+b, 0);
+            if (!totalTagged) {
+                return { tagPerformance: {}, allTags: [], exact: false };
+            }
+
+            const totalRight = Number(record.right || 0);
+            const totalWrong = Number(record.wrong || 0);
+            const totalBlank = Number(record.blank || 0);
+
+            const allocate = (totalValue) => {
+                const raw = tags.map(tag => ({
+                    tag,
+                    raw: totalValue * (tagCounts[tag] / totalTagged)
+                }));
+                const base = raw.map(x => ({
+                    tag: x.tag,
+                    value: Math.floor(x.raw)
+                }));
+                let remaining = totalValue - base.reduce((s,x) => s+x.value, 0);
+                raw
+                    .map((x, i) => ({ i, frac: x.raw - Math.floor(x.raw) }))
+                    .sort((a,b) => b.frac - a.frac)
+                    .slice(0, Math.max(0, remaining))
+                    .forEach(x => { base[x.i].value++; });
+                const map = {};
+                base.forEach(x => { map[x.tag] = x.value; });
+                return map;
+            };
+
+            const rMap = allocate(totalRight);
+            const wMap = allocate(totalWrong);
+            const bMap = allocate(totalBlank);
+
+            const tagPerformance = {};
+            tags.forEach(tag => {
+                const correct = rMap[tag] || 0;
+                const wrong = wMap[tag] || 0;
+                const blank = bMap[tag] || 0;
+                tagPerformance[tag] = {
+                    correct,
+                    wrong,
+                    blank,
+                    total: correct + wrong + blank
+                };
+            });
+
+            return { tagPerformance, allTags: tags, exact: false };
+        };
+
+        /* ==========================================================================
+           VIEW RESULT (from My Report) — opens the same score-card + live
+           leaderboard + SUBJECT/TOPIC ANALYTICS used after a fresh submission.
+           ========================================================================== */
         window.openHistoricalResult = function(pdfCode) {
             const record = window._historyRecordsCache && window._historyRecordsCache[pdfCode];
             if (!record) return window.showCustomAlert("Error", "Result data not found — please refresh My Report and try again.", "⚠️");
@@ -12806,21 +12901,50 @@
             const heading = document.getElementById('result-heading');
             if (heading) heading.innerHTML = '<span class="highlight">📊</span> Your Test Result';
 
-            // Hide the pieces that need the full per-question answer data,
-            // which isn't retained for past attempts — showing them without
-            // that data would be misleading. Score / Rank / Leaderboard below
-            // are all still real, live numbers pulled fresh from the database.
+            // Historical view intentionally hides action buttons and the live
+            // Correct/Wrong/Blank question-review carousel because old result
+            // documents do not store each student's answer selection.
             const btnRow = document.querySelector('.result-buttons-row');
             if (btnRow) btnRow.style.display = 'none';
             const analysisSection = document.querySelector('.result-analysis-section');
             if (analysisSection) analysisSection.style.display = 'none';
-            const analyticsContainer = document.getElementById('analytics-container');
-            if (analyticsContainer) analyticsContainer.style.display = 'none';
 
-            // Swap the close button to return to My Report instead of Home.
-            const closeBtn = document.getElementById('result-close-btn');
-            if (closeBtn) { closeBtn.innerText = "⬅️ Back to My Report";
-                closeBtn.setAttribute('onclick', 'window.closeHistoricalResult()'); }
+            // ---- REBUILD THE SAME ANALYTICS GRAPH AS THE FRESH RESULT SCREEN ----
+            const historicalAnalytics = window.buildHistoricalAnalytics(record, tData);
+            window._resultAllTags = historicalAnalytics.allTags || [];
+            window._resultTopicData = historicalAnalytics.tagPerformance || {};
+            window._resultTopicShowAll = false;
+
+            const analyticsContainer = document.getElementById('analytics-container');
+            if (analyticsContainer) {
+                analyticsContainer.style.display = 'block';
+                const badge = analyticsContainer.querySelector('.analytics-title .analytics-badge');
+                if (badge) {
+                    badge.textContent = historicalAnalytics.exact ? 'Saved Result' : 'Historical Estimate';
+                }
+            }
+
+            // Clear any chart instances left behind from a previous visit.
+            if (window.mainChartInstance) {
+                try { window.mainChartInstance.destroy(); } catch(e) {}
+                window.mainChartInstance = null;
+            }
+            (window.subChartInstances || []).forEach(c => { try { c.destroy(); } catch(e) {} });
+            window.subChartInstances = [];
+            (window.chapterChartInstances || []).forEach(c => { try { c.destroy(); } catch(e) {} });
+            window.chapterChartInstances = [];
+
+            window.renderEnhancedAnalytics(
+                historicalAnalytics.tagPerformance || {},
+                historicalAnalytics.allTags || []
+            );
+
+            // The current chapter renderer is intentionally disabled in this build,
+            // so calling it is safe and keeps the historical pipeline aligned with
+            // the fresh-result flow.
+            if (tData.questions && typeof window.renderChapterPerformance === 'function') {
+                window.renderChapterPerformance(tData.questions);
+            }
 
             // Rank + live leaderboard — same real data source a fresh
             // submission uses, just re-queried on demand.
@@ -12839,8 +12963,10 @@
             });
             window.fetchLeaderboardWithPhotos(record.testCode);
 
-            document.querySelectorAll('.view-section').forEach(v => { v.classList.remove('active-view');
-                v.style.display = ''; });
+            document.querySelectorAll('.view-section').forEach(v => {
+                v.classList.remove('active-view');
+                v.style.display = '';
+            });
             const resView = document.getElementById('result-view');
             if (resView) resView.classList.add('active-view');
             window.toggleAdminLock(true);
@@ -12854,6 +12980,14 @@
             if (btnRow) btnRow.style.display = '';
             const analysisSection = document.querySelector('.result-analysis-section');
             if (analysisSection) analysisSection.style.display = '';
+            const analyticsContainer = document.getElementById('analytics-container');
+            if (analyticsContainer) analyticsContainer.style.display = 'none';
+            if (window.mainChartInstance) {
+                try { window.mainChartInstance.destroy(); } catch(e) {}
+                window.mainChartInstance = null;
+            }
+            (window.subChartInstances || []).forEach(c => { try { c.destroy(); } catch(e) {} });
+            window.subChartInstances = [];
             const closeBtn = document.getElementById('result-close-btn');
             if (closeBtn) { closeBtn.innerText = "🏠 Close & Go Home";
                 closeBtn.setAttribute('onclick', 'window.closeAndRedirect()'); }
