@@ -3341,9 +3341,144 @@
             max-width: 100% !important;
         }
         #analysis-btn-container .btn {
-            font-size:10px !important;
-            padding:3px 6px !important;
-            flex: 0 1 auto;
+            font-size:15px !important;
+            padding:11px 18px !important;
+            min-height:46px !important;
+            min-width:145px !important;
+            flex: 1 1 145px;
+            font-weight:800 !important;
+            border-radius:12px !important;
+        }
+
+        /* Full-page Correct/Wrong/Blank review */
+        #category-review-view {
+            display:none;
+            position:fixed;
+            inset:0;
+            z-index:1000000000;
+            background:var(--bg-container);
+            overflow-y:auto;
+            -webkit-overflow-scrolling:touch;
+        }
+        #category-review-view .crv-shell {
+            min-height:100vh;
+            display:flex;
+            flex-direction:column;
+        }
+        #category-review-view .crv-header {
+            position:sticky;
+            top:0;
+            z-index:5;
+            background:var(--bg-header);
+            color:#fff;
+            padding:10px 14px;
+            display:flex;
+            align-items:center;
+            justify-content:space-between;
+            gap:10px;
+            box-shadow:var(--shadow-md);
+        }
+        #category-review-view .crv-header-title {
+            font-size:16px;
+            font-weight:800;
+        }
+        #category-review-view .crv-header-count {
+            font-size:11px;
+            font-weight:700;
+            opacity:.9;
+        }
+        #category-review-view .crv-close {
+            border:1px solid rgba(255,255,255,.3);
+            background:rgba(255,255,255,.12);
+            color:#fff;
+            border-radius:10px;
+            padding:8px 12px;
+            font-weight:800;
+            cursor:pointer;
+        }
+        #category-review-view .crv-content {
+            width:min(980px,100%);
+            margin:0 auto;
+            padding:14px;
+            box-sizing:border-box;
+        }
+        #category-review-view .crv-card {
+            background:var(--bg-card);
+            border:1px solid var(--border-color);
+            border-radius:14px;
+            box-shadow:var(--shadow-md);
+            padding:16px;
+        }
+        #category-review-view .crv-meta {
+            display:flex;
+            justify-content:space-between;
+            align-items:center;
+            gap:8px;
+            margin-bottom:10px;
+            flex-wrap:wrap;
+        }
+        #category-review-view .crv-question {
+            font-size:18px;
+            font-weight:700;
+            line-height:1.65;
+            margin-bottom:12px;
+        }
+        #category-review-view .crv-options {
+            display:grid;
+            grid-template-columns:1fr 1fr;
+            gap:8px;
+            margin-top:10px;
+        }
+        #category-review-view .crv-opt {
+            padding:10px 12px;
+            border:1px solid var(--border-color);
+            border-radius:10px;
+            background:var(--bg-subtle);
+            font-size:14px;
+            line-height:1.5;
+        }
+        #category-review-view .crv-solution-btn {
+            width:100%;
+            margin-top:14px;
+            min-height:46px;
+            border:0;
+            border-radius:11px;
+            background:var(--accent);
+            color:#111;
+            font-size:15px;
+            font-weight:900;
+            cursor:pointer;
+        }
+        #category-review-view .crv-solution {
+            display:none;
+            margin-top:10px;
+            background:var(--bg-subtle);
+            border-left:4px solid var(--accent);
+            border-radius:10px;
+            padding:13px 14px;
+            font-size:14px;
+            line-height:1.75;
+        }
+        #category-review-view .crv-nav {
+            display:flex;
+            gap:8px;
+            margin-top:14px;
+        }
+        #category-review-view .crv-nav button {
+            flex:1;
+            min-height:46px;
+            border-radius:11px;
+            border:1px solid var(--border-color);
+            background:var(--bg-card);
+            color:var(--text-main);
+            font-size:14px;
+            font-weight:800;
+            cursor:pointer;
+        }
+        @media (max-width:700px){
+            #category-review-view .crv-options{grid-template-columns:1fr;}
+            #category-review-view .crv-question{font-size:16px;}
+            #analysis-btn-container .btn{min-width:0; flex:1 1 100%;}
         }
 
         /* Analysis box – LARGER for better readability */
@@ -6180,9 +6315,9 @@
                         <!-- Analysis Section -->
                         <div class="result-analysis-section">
                             <div id="analysis-btn-container" style="display:flex;flex-wrap:wrap;gap:4px;justify-content:flex-start;position:relative !important;top:auto !important;z-index:auto !important;background:transparent !important;padding:0 !important;box-shadow:none !important;border:none !important;margin:0 !important;max-width:100% !important;">
-                                <button class="btn btn-success btn-sm" onclick="window.showAnalysis('right')">✅ Correct (<span id="btn-cnt-right">0</span>)</button>
-                                <button class="btn btn-danger btn-sm" onclick="window.showAnalysis('wrong')">❌ Wrong (<span id="btn-cnt-wrong">0</span>)</button>
-                                <button class="btn btn-outline btn-sm" style="border-color:var(--text-muted);color:var(--text-muted);" onclick="window.showAnalysis('blank')">⬜ Blank (<span id="btn-cnt-blank">0</span>)</button>
+                                <button class="btn btn-success btn-sm" onclick="window.openCategoryReview('right')">✅ Correct (<span id="btn-cnt-right">0</span>)</button>
+                                <button class="btn btn-danger btn-sm" onclick="window.openCategoryReview('wrong')">❌ Wrong (<span id="btn-cnt-wrong">0</span>)</button>
+                                <button class="btn btn-outline btn-sm" style="border-color:var(--text-muted);color:var(--text-muted);" onclick="window.openCategoryReview('blank')">⬜ Blank (<span id="btn-cnt-blank">0</span>)</button>
                             </div>
 
                             <div id="analysis-box" class="analysis-box">
@@ -6257,7 +6392,37 @@
         </div>
         <!-- end result-view -->
 
-        <!-- ===== LOADING / ERROR ===== -->
+        <!-- ===== FULL PAGE CORRECT / WRONG / BLANK REVIEW ===== -->
+    <div id="category-review-view" aria-hidden="true">
+        <div class="crv-shell">
+            <div class="crv-header">
+                <div>
+                    <div class="crv-header-title" id="crv-title">Question Review</div>
+                    <div class="crv-header-count" id="crv-count">1 / 1</div>
+                </div>
+                <button class="crv-close" onclick="window.closeCategoryReview()">✕ Close</button>
+            </div>
+            <div class="crv-content">
+                <div class="crv-card" id="crv-card">
+                    <div class="crv-meta">
+                        <span id="crv-status" class="sq-tag">Review</span>
+                        <span id="crv-qno" style="font-weight:800;color:var(--primary);">Q1</span>
+                    </div>
+                    <div id="crv-passage"></div>
+                    <div class="crv-question" id="crv-question"></div>
+                    <div class="crv-options" id="crv-options"></div>
+                    <button class="crv-solution-btn" id="crv-solution-btn" onclick="window.toggleCategorySolution()">💡 Solution</button>
+                    <div class="crv-solution" id="crv-solution"></div>
+                    <div class="crv-nav">
+                        <button id="crv-prev" onclick="window.prevCategoryReview()">◀ Previous</button>
+                        <button id="crv-next" onclick="window.nextCategoryReview()">Next ▶</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ===== LOADING / ERROR ===== -->
         <div id="loading-view" class="view-section" style="text-align:center; padding:40px 20px;">
             <div class="loader-mini" style="width:36px; height:36px; border-width:4px;"></div>
             <h3 style="color:var(--primary); margin-top:16px; font-size:17px;">Loading data, please wait...</h3>
@@ -11876,6 +12041,95 @@
         /* ==========================================================================
            ANALYSIS – with Larger Box and Better Readability
            ========================================================================== */
+        // ==========================================================================
+        // FULL-PAGE CORRECT / WRONG / BLANK REVIEW
+        // ==========================================================================
+        window.categoryReview = { items: [], index: 0, type: "" };
+
+        window.openCategoryReview = function(type) {
+            const questions = window.examData?.questions || [];
+            const items = [];
+            questions.forEach((q, i) => {
+                const u = window.userAnswers[i];
+                const c = window.getCleanAns(q.ans);
+                const g = window.getCleanAns(u);
+                const isRight = (g === c) && (u !== null);
+                const isBlank = u === null;
+                const isWrong = !isBlank && !isRight;
+                if ((type === 'right' && isRight) || (type === 'wrong' && isWrong) || (type === 'blank' && isBlank)) {
+                    items.push({ q, originalIndex:i, uAns:u, isRight, isBlank });
+                }
+            });
+            window.categoryReview = { items, index:0, type };
+            const view = document.getElementById('category-review-view');
+            if (!view) return;
+            view.style.display = 'block';
+            view.setAttribute('aria-hidden','false');
+            document.body.style.overflow='hidden';
+            window.renderCategoryReview();
+        };
+
+        window.closeCategoryReview = function() {
+            const view = document.getElementById('category-review-view');
+            if (view) { view.style.display='none'; view.setAttribute('aria-hidden','true'); }
+            document.body.style.overflow='';
+        };
+
+        window.renderCategoryReview = function() {
+            const data = window.categoryReview;
+            const items = data.items || [];
+            if (!items.length) return;
+            const d = items[data.index];
+            const q = d.q;
+            const typeLabel = data.type === 'right' ? 'Correct Questions' : (data.type === 'wrong' ? 'Wrong Questions' : 'Blank Questions');
+            const statusText = data.type === 'right' ? '✅ Correct' : (data.type === 'wrong' ? '❌ Wrong' : '⬜ Blank');
+            document.getElementById('crv-title').textContent = typeLabel;
+            document.getElementById('crv-count').textContent = `${data.index+1} / ${items.length}`;
+            document.getElementById('crv-status').textContent = statusText;
+            document.getElementById('crv-qno').textContent = `Q${d.originalIndex+1}`;
+            const passage = document.getElementById('crv-passage');
+            passage.innerHTML = q.passage ? `<div style="background:var(--bg-subtle);padding:10px 12px;border-left:4px solid var(--accent);border-radius:8px;margin-bottom:10px;font-size:13px;line-height:1.6;">${q.passage}</div>` : '';
+            document.getElementById('crv-question').innerHTML = q.q || '';
+            const options = document.getElementById('crv-options');
+            options.innerHTML = (q.opts || []).map(o => {
+                const cls = o.id === window.getCleanAns(q.ans) ? 'border:2px solid var(--success);background:rgba(15,157,88,.10);font-weight:800;' : '';
+                return `<div class="crv-opt" style="${cls}"><b>${o.id}.</b> ${o.text || ''}</div>`;
+            }).join('');
+            const sol = document.getElementById('crv-solution');
+            const solBtn = document.getElementById('crv-solution-btn');
+            sol.innerHTML = q.exp && q.exp.trim() ? q.exp : '<span style="color:var(--text-muted);">इस प्रश्न का solution उपलब्ध नहीं है।</span>';
+            sol.style.display='none';
+            solBtn.textContent='💡 Solution';
+            const prev=document.getElementById('crv-prev');
+            const next=document.getElementById('crv-next');
+            prev.disabled=data.index===0;
+            next.disabled=data.index===items.length-1;
+            prev.style.opacity=prev.disabled?'.45':'1';
+            next.style.opacity=next.disabled?'.45':'1';
+            const content = document.getElementById('category-review-view');
+            content.scrollTo({top:0,behavior:'smooth'});
+            if (window.MathJax && typeof window.typesetMath === 'function') {
+                window.typesetMath(document.getElementById('crv-card')).catch(()=>{});
+            }
+        };
+
+        window.toggleCategorySolution = function() {
+            const sol=document.getElementById('crv-solution');
+            const btn=document.getElementById('crv-solution-btn');
+            if (!sol || !btn) return;
+            const open=sol.style.display==='block';
+            sol.style.display=open?'none':'block';
+            btn.textContent=open?'💡 Solution':'🔽 Hide Solution';
+            if (!open && window.MathJax && typeof window.typesetMath==='function') window.typesetMath(sol).catch(()=>{});
+        };
+
+        window.prevCategoryReview = function() {
+            if (window.categoryReview.index>0) { window.categoryReview.index--; window.renderCategoryReview(); }
+        };
+        window.nextCategoryReview = function() {
+            if (window.categoryReview.index < window.categoryReview.items.length-1) { window.categoryReview.index++; window.renderCategoryReview(); }
+        };
+
         window.showAnalysis = function(t) {
             window.currentAnalysisArray = [];
             window.currentAnalysisType = t;
