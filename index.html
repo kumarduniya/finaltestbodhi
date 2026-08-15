@@ -3400,7 +3400,7 @@
             width:100% !important;
             max-width:none !important;
             margin:0;
-            padding:12px 14px 20px;
+            padding:8px 10px 14px;
             box-sizing:border-box;
         }
         #category-review-view .crv-card {
@@ -3409,73 +3409,78 @@
             box-sizing:border-box;
             background:var(--bg-card);
             border:1px solid var(--border-color);
-            border-radius:14px;
-            box-shadow:var(--shadow-md);
-            padding:14px 18px 18px;
+            border-radius:10px;
+            box-shadow:var(--shadow-sm);
+            padding:9px 12px 12px;
         }
         #category-review-view .crv-meta {
             display:flex;
             justify-content:space-between;
             align-items:center;
             gap:8px;
-            margin-bottom:10px;
+            margin-bottom:6px;
             flex-wrap:wrap;
         }
         #category-review-view .crv-question {
-            font-size:16px;
+            font-size:14px;
             font-weight:700;
-            line-height:1.55;
-            margin-bottom:10px;
+            line-height:1.45;
+            margin-bottom:7px;
         }
         #category-review-view .crv-options {
             display:grid;
             grid-template-columns:1fr 1fr;
-            gap:8px;
-            margin-top:10px;
+            gap:6px;
+            margin-top:6px;
         }
         #category-review-view .crv-opt {
-            padding:9px 12px;
+            padding:7px 10px;
             border:1px solid var(--border-color);
-            border-radius:10px;
+            border-radius:8px;
             background:var(--bg-subtle);
-            font-size:13px;
-            line-height:1.45;
+            font-size:12px;
+            line-height:1.35;
         }
         #category-review-view .crv-solution-btn {
             width:100%;
-            margin-top:12px;
-            min-height:42px;
+            margin-top:8px;
+            min-height:36px;
             border:0;
-            border-radius:10px;
+            border-radius:8px;
             background:var(--accent);
             color:#111;
-            font-size:14px;
+            font-size:12px;
             font-weight:900;
             cursor:pointer;
         }
         #category-review-view .crv-solution {
             display:none;
-            margin-top:9px;
+            margin-top:7px;
             background:var(--bg-subtle);
-            border-left:4px solid var(--accent);
-            border-radius:10px;
-            padding:12px 14px;
-            font-size:13px;
-            line-height:1.65;
+            border-left:3px solid var(--accent);
+            border-radius:8px;
+            padding:10px 12px;
+            font-size:12px;
+            line-height:1.55;
+            max-height:300px;
+            overflow-y:auto;
+            overflow-x:hidden;
+            overscroll-behavior:contain;
+            -webkit-overflow-scrolling:touch;
         }
         #category-review-view .crv-nav {
             display:flex;
-            gap:8px;
-            margin-top:14px;
+            gap:6px;
+            margin-top:9px;
         }
         #category-review-view .crv-nav button {
             flex:1;
-            min-height:42px;
-            border-radius:10px;
+            min-height:36px;
+            border-radius:8px;
             border:1px solid var(--border-color);
             background:var(--bg-card);
             color:var(--text-main);
-            font-size:13px;
+            font-size:12px;
             font-weight:800;
             cursor:pointer;
         }
@@ -12111,19 +12116,11 @@
             next.disabled=data.index===items.length-1;
             prev.style.opacity=prev.disabled?'.45':'1';
             next.style.opacity=next.disabled?'.45':'1';
-            const content = document.getElementById('category-review-view');
-            content.scrollTo({top:0,behavior:'smooth'});
             if (window.MathJax && typeof window.typesetMath === 'function') {
                 window.typesetMath(document.getElementById('crv-card')).catch(()=>{});
             }
-            // Once the student chooses to view a solution, keep solutions open
-            // automatically as they move through the selected category.
-            if (autoOpen) {
-                const visibleSol = document.getElementById('crv-solution');
-                if (visibleSol) {
-                    setTimeout(() => visibleSol.scrollIntoView({behavior:'smooth', block:'nearest'}), 50);
-                }
-            }
+            // Keep the solution open across questions, but do NOT scroll the
+            // outer review page. The solution itself has its own scroll area.
         };
 
         window.toggleCategorySolution = function() {
@@ -12138,7 +12135,7 @@
                 sol.style.display='block';
                 btn.textContent='🔽 Hide Solution';
                 if (window.MathJax && typeof window.typesetMath==='function') window.typesetMath(sol).catch(()=>{});
-                setTimeout(() => sol.scrollIntoView({behavior:'smooth', block:'nearest'}), 50);
+                // Keep page/question fixed; only the solution box itself scrolls.
             } else {
                 sol.style.display='none';
                 btn.textContent='💡 Solution';
