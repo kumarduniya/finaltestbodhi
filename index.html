@@ -3424,6 +3424,8 @@
             min-height:0;
             height:100%;
             overflow:hidden;
+            position:relative;
+            padding-bottom:112px;
         }
         #category-review-view .crv-meta,
         #category-review-view .crv-question,
@@ -3459,10 +3461,33 @@
             font-size:12px;
             line-height:1.35;
         }
+        /* Fixed bottom controls: always reachable even when the question contains
+           a tall SVG/image/chart. The question itself never has to move just to
+           access Solution/Previous/Next. */
+        #category-review-view .crv-action-dock {
+            position:absolute;
+            left:12px;
+            right:12px;
+            bottom:12px;
+            z-index:30;
+            display:flex;
+            flex-direction:column;
+            gap:6px;
+            padding:7px;
+            background:rgba(255,255,255,.96);
+            border:1px solid var(--border-color);
+            border-radius:10px;
+            box-shadow:0 8px 24px rgba(0,0,0,.14);
+            backdrop-filter:blur(6px);
+            box-sizing:border-box;
+        }
+        body.dark-mode #category-review-view .crv-action-dock {
+            background:rgba(20,27,35,.96);
+        }
         #category-review-view .crv-solution-btn {
             width:100%;
-            margin-top:8px;
-            min-height:36px;
+            margin:0;
+            min-height:34px;
             border:0;
             border-radius:8px;
             background:var(--accent);
@@ -3473,31 +3498,32 @@
         }
         #category-review-view .crv-solution {
             display:none;
-            margin-top:7px;
+            position:absolute;
+            left:12px;
+            right:12px;
+            bottom:112px;
+            height:min(44vh, 360px);
+            margin:0;
             background:var(--bg-subtle);
             border-left:3px solid var(--accent);
-            border-radius:8px;
+            border-radius:9px;
             padding:10px 12px;
             font-size:12px;
             line-height:1.55;
-            flex:1 1 auto;
-            min-height:0;
-            max-height:none;
             overflow-y:auto;
             overflow-x:hidden;
             overscroll-behavior:contain;
             -webkit-overflow-scrolling:touch;
             box-sizing:border-box;
-        }
-        #category-review-view .crv-solution-btn {
-            flex:0 0 auto;
+            z-index:25;
+            box-shadow:0 8px 24px rgba(0,0,0,.16);
         }
         #category-review-view .crv-nav {
             display:flex;
             gap:6px;
-            margin:8px 0 7px;
+            margin:0;
             position:relative;
-            z-index:3;
+            z-index:31;
             flex:0 0 auto;
         }
         #category-review-view .crv-nav button {
@@ -6454,12 +6480,14 @@
                     <div id="crv-passage"></div>
                     <div class="crv-question" id="crv-question"></div>
                     <div class="crv-options" id="crv-options"></div>
-                    <div class="crv-nav">
-                        <button id="crv-prev" onclick="window.prevCategoryReview()">◀ Previous</button>
-                        <button id="crv-next" onclick="window.nextCategoryReview()">Next ▶</button>
-                    </div>
-                    <button class="crv-solution-btn" id="crv-solution-btn" onclick="window.toggleCategorySolution()">💡 Solution</button>
                     <div class="crv-solution" id="crv-solution"></div>
+                    <div class="crv-action-dock" id="crv-action-dock">
+                        <div class="crv-nav">
+                            <button id="crv-prev" onclick="window.prevCategoryReview()">◀ Previous</button>
+                            <button id="crv-next" onclick="window.nextCategoryReview()">Next ▶</button>
+                        </div>
+                        <button class="crv-solution-btn" id="crv-solution-btn" onclick="window.toggleCategorySolution()">💡 Solution</button>
+                    </div>
                 </div>
             </div>
         </div>
@@ -12140,10 +12168,13 @@
             }).join('');
             const sol = document.getElementById('crv-solution');
             const solBtn = document.getElementById('crv-solution-btn');
-            sol.innerHTML = q.exp && q.exp.trim() ? q.exp : '<span style="color:var(--text-muted);">इस प्रश्न का solution उपलब्ध नहीं है।</span>';
-            const autoOpen = !!data.solutionAutoOpen;
+            const hasSolution = !!(q.exp && q.exp.trim());
+            sol.innerHTML = hasSolution ? q.exp : '<span style="color:var(--text-muted);">इस प्रश्न का solution उपलब्ध नहीं है।</span>';
+            const autoOpen = !!data.solutionAutoOpen && hasSolution;
             sol.style.display = autoOpen ? 'block' : 'none';
             solBtn.textContent = autoOpen ? '🔽 Hide Solution' : '💡 Solution';
+            solBtn.disabled = !hasSolution;
+            solBtn.style.opacity = hasSolution ? '1' : '.55';
             // Keep the question fixed in place. When moving to another question,
             // start its own solution area from the top instead of moving the page.
             sol.scrollTop = 0;
@@ -12180,10 +12211,16 @@
         };
 
         window.prevCategoryReview = function() {
-            if (window.categoryReview.index>0) { window.categoryReview.index--; window.renderCategoryReview(); }
+            if (window.categoryReview.index>0) {
+                window.categoryReview.index--;
+                window.renderCategoryReview();
+            }
         };
         window.nextCategoryReview = function() {
-            if (window.categoryReview.index < window.categoryReview.items.length-1) { window.categoryReview.index++; window.renderCategoryReview(); }
+            if (window.categoryReview.index < window.categoryReview.items.length-1) {
+                window.categoryReview.index++;
+                window.renderCategoryReview();
+            }
         };
 
         window.showAnalysis = function(t) {
