@@ -7193,11 +7193,13 @@
                     unifiedMap.set(t.code, t);
                 });
             }
+            // Firebase is the authoritative source. LocalStorage is only an
+            // offline fallback/cache and must NEVER overwrite a newer server test.
             const localTests = JSON.parse(localStorage.getItem('myMockTests')) || [];
             localTests.forEach(lt => {
                 if (lt.isActive === false || hidden.includes(lt.code)) return;
                 if (lt.testMode === 'live' && !window.isLiveTestExpired(lt)) return;
-                unifiedMap.set(lt.code, lt);
+                if (!unifiedMap.has(lt.code)) unifiedMap.set(lt.code, lt);
             });
             return Array.from(unifiedMap.values());
         };
@@ -7541,7 +7543,9 @@
 
         window.sanitizeMath = function(text) {
             if (!text) return text;
-            let str = window.normalizeCurrencyDollarsSafe(String(text));
+            // IMPORTANT: never reinterpret '$' here as currency. '$...$' is a
+            // MathJax delimiter; monetary values should use ₹ in the source.
+            let str = String(text);
 
             // Metadata lines are never math.
             const protectedLines = [];
@@ -8781,55 +8785,67 @@
                     const loadingView = document.getElementById('loading-view');
                     if (loadingView) loadingView.classList.add('active-view');
                     window.toggleAdminLock(false);
-                    const localTests = JSON.parse(localStorage.getItem('myMockTests')) || [];
-                    const localTestInfo = localTests.find(t => t.code === testCode);
-                    if (localTestInfo) {
-                        localTestInfo.questions = window.sanitizeQuestions(localTestInfo.questions);
-                        window.handleTestLoad(localTestInfo);
-                    } else {
-                        const testRef = db.collection("tests").doc(testCode);
-                        testRef.get().then((doc) => {
-                            if (!doc.exists) {
-                                const loadingV = document.getElementById('loading-view');
-                                if (loadingV) loadingV.classList.remove('active-view');
-                                window.showErrorView("❌ Test not found in Database.");
-                                return;
-                            }
-                            const fData = doc.data();
-                            testRef.collection("secure").doc("key").get().then((secureDoc) => {
-                                if (secureDoc.exists) {
-                                    const secure = secureDoc.data();
-                                    if (secure.rawText) fData.rawText = secure.rawText;
-                                    if (secure.answerKey && fData.questions) {
-                                        fData.questions = fData.questions.map((q, i) => {
-                                            const sk = secure.answerKey[i] || {};
-                                            const predicted = (q.predicted || []).map((p, pi) => ({
-                                                q: p.q || "",
-                                                s: (sk.predictedSolutions && sk.predictedSolutions[pi]) || ""
-                                            }));
-                                            return { ...q, ans: sk.ans || "", exp: sk.exp || "", predicted };
-                                        });
-                                    }
-                                }
-                                fData.questions = window.sanitizeQuestions(fData.questions);
-                                window.handleTestLoad(fData);
-                            }).catch(() => {
-                                // Not authorized to read the answer key yet (e.g. this
-                                // is a paid test and the student isn't premium). Load
-                                // the test without it -- the existing free/premium
-                                // gate on the entry screen still decides whether
-                                // "Start Test" is shown, and there is now no answer
-                                // key sitting in memory for an unauthorized user to
-                                // read out of the console.
-                                fData.questions = window.sanitizeQuestions(fData.questions);
-                                window.handleTestLoad(fData);
-                            });
-                        }).catch((error) => {
+                    // IMPORTANT: the server is always the source of truth for a
+                    // direct test link. A stale localStorage copy must never bypass
+                    // the Firestore fetch, especially after the admin adds/edits
+                    // questions. LocalStorage is used only if the server is truly
+                    // unreachable.
+                    const testRef = db.collection("tests").doc(testCode);
+                    testRef.get().then((doc) => {
+                        if (!doc.exists) {
                             const loadingV = document.getElementById('loading-view');
                             if (loadingV) loadingV.classList.remove('active-view');
-                            window.showErrorView("❌ Network Error!");
+                            window.showErrorView("❌ Test not found in Database.");
+                            return;
+                        }
+                        const fData = doc.data();
+                        testRef.collection("secure").doc("key").get().then((secureDoc) => {
+                            if (secureDoc.exists) {
+                                const secure = secureDoc.data();
+                                if (secure.rawText) fData.rawText = secure.rawText;
+                                if (secure.answerKey && fData.questions) {
+                                    fData.questions = fData.questions.map((q, i) => {
+                                        const sk = secure.answerKey[i] || {};
+                                        const predicted = (q.predicted || []).map((p, pi) => ({
+                                            q: p.q || "",
+                                            s: (sk.predictedSolutions && sk.predictedSolutions[pi]) || ""
+                                        }));
+                                        return { ...q, ans: sk.ans || "", exp: sk.exp || "", predicted };
+                                    });
+                                }
+                            }
+                            fData.questions = window.sanitizeQuestions(fData.questions);
+                            // Refresh the cache with the freshly fetched server version
+                            // so a later offline load has the latest known test.
+                            try {
+                                const cache = JSON.parse(localStorage.getItem('myMockTests')) || [];
+                                const idx = cache.findIndex(t => t.code === testCode);
+                                if (idx >= 0) cache[idx] = { ...cache[idx], ...fData };
+                                else cache.push(fData);
+                                localStorage.setItem('myMockTests', JSON.stringify(cache));
+                            } catch (_) {}
+                            window.handleTestLoad(fData);
+                        }).catch(() => {
+                            // Not authorized to read the secure answer key. The public
+                            // test is still valid; the premium/free gate controls access
+                            // to the solution data.
+                            fData.questions = window.sanitizeQuestions(fData.questions);
+                            window.handleTestLoad(fData);
                         });
-                    }
+                    }).catch(() => {
+                        // Only now do we fall back to LocalStorage: genuine offline/network
+                        // failure. This fallback can never override a successful server read.
+                        const localTests = JSON.parse(localStorage.getItem('myMockTests')) || [];
+                        const localTestInfo = localTests.find(t => t.code === testCode);
+                        const loadingV = document.getElementById('loading-view');
+                        if (localTestInfo) {
+                            localTestInfo.questions = window.sanitizeQuestions(localTestInfo.questions);
+                            window.handleTestLoad(localTestInfo);
+                        } else {
+                            if (loadingV) loadingV.classList.remove('active-view');
+                            window.showErrorView("❌ Network Error! Test cache not available.");
+                        }
+                    });
                 }
             } else {
                 if (isLoggedIn) {
