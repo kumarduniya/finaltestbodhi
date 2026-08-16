@@ -7403,39 +7403,145 @@
            - Hindi-labelled fractions are rendered as native HTML fractions.
            - The Cloudflare Worker remains the source of the original TeX.
            ===================================================================== */
-        window.sanitizeMath = function(text) {
+
+        /*
+         * UNIVERSAL CURRENCY DOLLAR GUARD
+         * --------------------------------
+         * '$' has two meanings in this portal:
+         *   1) MathJax delimiter: $x$, $\frac{a}{b}$, $$...$$
+         *   2) Currency symbol in pasted questions: $500, $33170, $5
+         *
+         * We NEVER rewrite a real math span.
+         * We only convert a '$' that is clearly a numeric currency prefix
+         * OUTSIDE math. This prevents one new "$5" question from disturbing
+         * the rendering of unrelated mathematics elsewhere.
+         *
+         * Numeric forms handled:
+         *   $5
+         *   $33170
+         *   $33,170.50
+         *   $33170$     -> ₹33170
+         *
+         * Math remains unchanged:
+         *   $x$
+         *   $SP_1$
+         *   $\frac{100}{55}$
+         *   $$...$$
+         *   $\$33170$
+         */
+        window.normalizeCurrencyDollarsSafe = function(text) {
             if (!text) return text;
-            let str = String(text);
+            const s = String(text);
+            let out = '';
+            let i = 0;
+            const n = s.length;
 
-            // ===================================================================
-            // UNIVERSAL CURRENCY / DOLLAR SAFETY
-            // ===================================================================
-            // Numeric dollar amounts such as "$5", "$33170" and "$33,170.50"
-            // are currency, not MathJax delimiters. We normalize only clearly
-            // numeric currency so real math like $x+5$, $SP_1$, $\frac{a}{b}$
-            // and $$...$$ remains untouched. Escaped \$ inside math also stays.
-            // ===================================================================
-            function normalizeNumericDollarCurrency(input) {
-                let s = String(input || '');
+            const isEscapedAt = (idx) => {
+                let backslashes = 0;
+                for (let k = idx - 1; k >= 0 && s[k] === '\\'; k--) backslashes++;
+                return (backslashes % 2) === 1;
+            };
 
-                // Paired numeric amount: $33170$ -> ₹33170
-                s = s.replace(
-                    /(?<!\\)\$(\d[\d,]*(?:\.\d+)?)\$(?!\$)/g,
-                    '₹$1'
-                );
+            const findClosing = (start, delim) => {
+                const close = delim;
+                for (let k = start; k < n; k++) {
+                    if (s[k] !== '$') continue;
+                    if (isEscapedAt(k)) continue;
+                    if (delim === '$$') {
+                        if (s[k + 1] === '$' && !isEscapedAt(k + 1)) return k;
+                    } else {
+                        if (s[k + 1] === '$' && !isEscapedAt(k + 1)) {
+                            k++;
+                            continue;
+                        }
+                        return k;
+                    }
+                }
+                return -1;
+            };
 
-                // Unpaired numeric amount: $5 -> ₹5.
-                // $5x is not rewritten because the next character is a Latin
-                // letter; this protects genuine variable-based math.
-                s = s.replace(
-                    /(?<![\$\\])\$(\d[\d,]*(?:\.\d+)?)(?![\$\dA-Za-z_])/g,
-                    '₹$1'
-                );
+            while (i < n) {
+                // Escaped dollar outside math: \$500 -> ₹500.
+                if (s[i] === '\\' && s[i + 1] === '$' && !isEscapedAt(i)) {
+                    const m = s.slice(i + 2).match(/^(\s*\d[\d,]*(?:\.\d+)?)/);
+                    if (m) {
+                        out += '₹' + m[1];
+                        i += 2 + m[1].length;
+                        continue;
+                    }
+                    out += s[i];
+                    i++;
+                    continue;
+                }
 
-                return s;
+                if (s[i] !== '$' || isEscapedAt(i)) {
+                    out += s[i];
+                    i++;
+                    continue;
+                }
+
+                // Display math $$...$$ is always math. Never touch it.
+                if (s[i + 1] === '$') {
+                    const close = findClosing(i + 2, '$$');
+                    if (close >= 0) {
+                        const end = close + 2;
+                        out += s.slice(i, end);
+                        i = end;
+                        continue;
+                    }
+                    // Unclosed $$: leave untouched; MathJax can report it,
+                    // but we must not invent a transformation.
+                    out += '$$';
+                    i += 2;
+                    continue;
+                }
+
+                // Look immediately after $.
+                let j = i + 1;
+                while (j < n && /[ \t]/.test(s[j])) j++;
+
+                // A numeric prefix is unambiguously currency in normal text.
+                if (j < n && /\d/.test(s[j])) {
+                    const numMatch = s.slice(j).match(/^(\d[\d,]*(?:\.\d+)?)/);
+                    if (numMatch) {
+                        const amount = numMatch[1];
+                        let k = j + amount.length;
+                        // `$33170$` is also treated as a currency token and
+                        // consumes the trailing delimiter instead of leaving
+                        // a stray '$' behind.
+                        while (k < n && /[ \t]/.test(s[k])) k++;
+                        if (s[k] === '$' && !isEscapedAt(k) && s[k + 1] !== '$') {
+                            out += '₹' + amount;
+                            i = k + 1;
+                            continue;
+                        }
+                        out += '₹' + amount;
+                        i = j + amount.length;
+                        continue;
+                    }
+                }
+
+                // Otherwise, if a valid inline math closing delimiter exists,
+                // preserve the complete span exactly. Existing TeX remains
+                // untouched.
+                const close = findClosing(i + 1, '$');
+                if (close >= 0) {
+                    out += s.slice(i, close + 1);
+                    i = close + 1;
+                    continue;
+                }
+
+                // Standalone/non-numeric '$': preserve exactly.
+                out += '$';
+                i++;
             }
 
-            str = normalizeNumericDollarCurrency(str);
+            return out;
+        };
+
+        window.sanitizeMath = function(text) {
+            if (!text) return text;
+            let str = window.normalizeCurrencyDollarsSafe(String(text));
 
             // Metadata lines are never math.
             const protectedLines = [];
